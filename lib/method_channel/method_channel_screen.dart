@@ -11,24 +11,19 @@ class MethodChannelScreen extends StatefulWidget {
 
 class _MethodChannelScreenState extends State<MethodChannelScreen> {
   final _batteryService = BatteryService();
-  int? _batteryLevel;
-  String? _batteryState;
+  Map<String, dynamic>? _info;
   String? _error;
   bool _loading = false;
 
-  Future<void> _fetchBatteryLevel() async {
+  Future<void> _fetchBatteryInfo() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final level = await _batteryService.getBatteryLevel();
-      final state = await _batteryService.getBatteryState();
+      final info = await _batteryService.getBatteryInfo();
       if (!mounted) return;
-      setState(() {
-        _batteryLevel = level;
-        _batteryState = state;
-      });
+      setState(() => _info = info);
     } on PlatformException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message ?? 'Error: ${e.code}');
@@ -56,7 +51,7 @@ class _MethodChannelScreenState extends State<MethodChannelScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Text('Battery Level', style: theme.textTheme.titleMedium),
+                    Text('Battery Info', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 16),
                     if (_loading)
                       const CircularProgressIndicator()
@@ -65,18 +60,8 @@ class _MethodChannelScreenState extends State<MethodChannelScreen> {
                         _error!,
                         style: TextStyle(color: theme.colorScheme.error),
                       )
-                    else if (_batteryLevel != null)
-                      Column(
-                        children: [
-                          Text(
-                            '$_batteryLevel%',
-                            style: theme.textTheme.displayMedium?.copyWith(
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          Text('State: $_batteryState'),
-                        ],
-                      )
+                    else if (_info != null)
+                      _BatteryInfoDisplay(info: _info!, theme: theme)
                     else
                       Text(
                         'Tap the button to fetch battery info',
@@ -88,9 +73,9 @@ class _MethodChannelScreenState extends State<MethodChannelScreen> {
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: _loading ? null : _fetchBatteryLevel,
+              onPressed: _loading ? null : _fetchBatteryInfo,
               icon: const Icon(Icons.battery_full),
-              label: const Text('Get Battery Level'),
+              label: const Text('Get Battery Info'),
             ),
             const SizedBox(height: 32),
             Card(
@@ -106,7 +91,8 @@ class _MethodChannelScreenState extends State<MethodChannelScreen> {
                       'MethodChannel uses a request-response pattern. '
                       'Dart sends a method name + arguments to the native side, '
                       'which processes the request and returns a result. '
-                      'Data is serialized via StandardMethodCodec (binary).',
+                      'getBatteryInfo returns level, state, and technology in a '
+                      'single round-trip, serialized via StandardMethodCodec.',
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
@@ -116,6 +102,42 @@ class _MethodChannelScreenState extends State<MethodChannelScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BatteryInfoDisplay extends StatelessWidget {
+  const _BatteryInfoDisplay({required this.info, required this.theme});
+
+  final Map<String, dynamic> info;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = info['level'] as int?;
+    final state = info['state'] as String? ?? 'unknown';
+    final technology = info['technology'] as String?;
+    final hasLevel = level != null && level >= 0;
+
+    return Column(
+      children: [
+        if (hasLevel)
+          Text(
+            '$level%',
+            style: theme.textTheme.displayMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          )
+        else
+          Text(
+            'Battery level unavailable',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        Text('State: $state'),
+        if (technology != null) Text('Technology: $technology'),
+      ],
     );
   }
 }

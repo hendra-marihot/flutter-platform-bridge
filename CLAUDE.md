@@ -46,8 +46,8 @@ test/
     battery_service_test.dart                 ← MethodChannel mock tests
     method_channel_screen_test.dart           ← widget interaction tests
   event_channel/
-    sensor_stream_test.dart                   ← AccelerometerEvent + stream caching
-    event_channel_screen_test.dart            ← initial state widget tests
+    sensor_stream_test.dart                   ← AccelerometerEvent, stream caching + parsing
+    event_channel_screen_test.dart            ← widget + stream behavior (data/error/dispose)
 ```
 
 ## Build commands
@@ -78,8 +78,9 @@ screens are display-only and work in any environment including `flutter test`.
 Each communication pattern is self-contained in its own subdirectory:
 
 - **method_channel/**: `BatteryService` wraps the `MethodChannel` and exposes typed async
-  methods. `MethodChannelScreen` is a `StatefulWidget` that calls `BatteryService` and
-  manages loading/error/data state.
+  methods. `MethodChannelScreen` calls `getBatteryInfo()` for a single round-trip returning
+  level, state, and technology, and manages loading/error/data state. A level outside
+  `0..100` renders as "Battery level unavailable" rather than a raw percentage.
 - **event_channel/**: `SensorStream` wraps the `EventChannel` and exposes a typed
   `Stream<AccelerometerEvent>`. `EventChannelScreen` subscribes in `_startListening()` and
   cancels in `_stopListening()` and `dispose()`.
@@ -93,10 +94,15 @@ Each communication pattern is self-contained in its own subdirectory:
 **Android** (Kotlin): `android/app/src/main/kotlin/com/hendramarihot/platform_bridge/MainActivity.kt`
 
 - `MethodChannel` handler for `getBatteryLevel`, `getBatteryState`, `getBatteryInfo` using
-  `BatteryManager`.
+  `BatteryManager`. `getBatteryLevel` clamps to `0..100` (returns `-1` otherwise) because
+  `getIntProperty` returns `Integer.MIN_VALUE` on some emulators; `getBatteryInfo` reads the
+  real `EXTRA_TECHNOLOGY` from the sticky `ACTION_BATTERY_CHANGED` intent.
 - `EventChannel` handler via `AccelerometerStreamHandler` using `SensorManager` /
-  `SensorEventListener`.
-- Sensor listener is registered in `onListen` and unregistered in `onCancel`.
+  `SensorEventListener`. Sensor events are posted to the main thread before
+  `EventSink.success` (the sink is `@UiThread`).
+- Sensor listener is registered in `onListen` and unregistered in `onCancel`. Channel
+  handlers are detached in `cleanUpFlutterEngine` to avoid leaking the Activity via a cached
+  engine; `AccelerometerStreamHandler` holds an application `Context`, not the Activity.
 
 **iOS**: No native handlers exist yet.
 
@@ -116,13 +122,17 @@ Follow the project's existing Flutter/Dart style:
 
 ## Testing
 
-30 tests across 6 files. Run with `flutter test` or `flutter test --coverage`.
+39 tests across 6 files. Run with `flutter test` or `flutter test --coverage`.
 
 Mock MethodChannel in tests via:
 ```dart
 TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
     .setMockMethodCallHandler(channel, handler);
 ```
+
+Mock EventChannel streams via `setMockStreamHandler` + `MockStreamHandler.inline(...)`,
+then drive the widget with `await tester.pump()` — never `pumpAndSettle()` while the
+"Listening…" spinner is on screen (indefinite animation → test timeout).
 
 ## Gotchas
 
@@ -134,6 +144,12 @@ TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
   `receiveBroadcastStream()` on every access (leaks native listeners).
 - `flutter test --coverage` writes `coverage/lcov.info` but the `lcov` CLI may not be
   installed. Parse the file directly with awk (`LF:`/`LH:` lines) for CI.
+- Sensor data is parsed defensively in `SensorStream._parseEvent`: malformed/partial native
+  payloads throw a `FormatException` (surfaced via the screen's `onError`) instead of a raw
+  `TypeError` that would tear down the whole stream on one bad frame.
+- In widget tests, `.icon` buttons (`FilledButton.icon`, etc.) are private subtypes — use
+  `find.bySubtype<FilledButton>()`, not `find.byType(FilledButton)` (which matches exact
+  runtime type and finds nothing).
 - Always run `dart format .` before committing — the project enforces formatting in CI.
 
 ## Important constraints

@@ -7,14 +7,20 @@ class SensorStream {
 
   late final Stream<AccelerometerEvent> accelerometerEvents = _channel
       .receiveBroadcastStream()
-      .map((event) {
-        final data = Map<String, dynamic>.from(event as Map);
-        return AccelerometerEvent(
-          x: (data['x'] as num).toDouble(),
-          y: (data['y'] as num).toDouble(),
-          z: (data['z'] as num).toDouble(),
-        );
-      });
+      .map(_parseEvent);
+
+  static AccelerometerEvent _parseEvent(Object? event) {
+    if (event is! Map) {
+      throw FormatException('Expected a map sensor event, got $event');
+    }
+    final x = (event['x'] as num?)?.toDouble();
+    final y = (event['y'] as num?)?.toDouble();
+    final z = (event['z'] as num?)?.toDouble();
+    if (x == null || y == null || z == null) {
+      throw FormatException('Sensor event missing x/y/z values: $event');
+    }
+    return AccelerometerEvent(x: x, y: y, z: z);
+  }
 }
 
 class AccelerometerEvent {

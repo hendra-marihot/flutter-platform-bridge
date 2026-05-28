@@ -180,13 +180,16 @@ class _AxisRow extends StatelessWidget {
     required this.theme,
   });
 
+  // Full-scale acceleration (m/s²) mapped to a full progress bar (~2g).
+  static const _maxMagnitude = 20.0;
+
   final String label;
   final double value;
   final ThemeData theme;
 
   @override
   Widget build(BuildContext context) {
-    final clamped = (value.abs() / 20.0).clamp(0.0, 1.0);
+    final clamped = (value.abs() / _maxMagnitude).clamp(0.0, 1.0);
     return Row(
       children: [
         SizedBox(

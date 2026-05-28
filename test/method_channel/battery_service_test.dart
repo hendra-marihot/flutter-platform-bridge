@@ -64,6 +64,20 @@ void main() {
 
         expect(await service.getBatteryState(), 'unknown');
       });
+
+      test('propagates PlatformException from native', () async {
+        setUpMock((call) async {
+          throw PlatformException(
+            code: 'UNAVAILABLE',
+            message: 'Battery state not available',
+          );
+        });
+
+        expect(
+          () => service.getBatteryState(),
+          throwsA(isA<PlatformException>()),
+        );
+      });
     });
 
     group('getBatteryInfo', () {

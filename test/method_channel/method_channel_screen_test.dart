@@ -10,16 +10,16 @@ void main() {
 
   const channel = MethodChannel('com.hendramarihot.platform_bridge/battery');
 
-  void setUpMockChannel({int level = 85, String state = 'discharging'}) {
+  void setUpMockChannel({
+    int level = 85,
+    String state = 'discharging',
+    String technology = 'Li-ion',
+  }) {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           switch (call.method) {
-            case 'getBatteryLevel':
-              return level;
-            case 'getBatteryState':
-              return state;
             case 'getBatteryInfo':
-              return {'level': level, 'state': state, 'technology': 'Li-ion'};
+              return {'level': level, 'state': state, 'technology': technology};
             default:
               throw PlatformException(code: 'NOT_IMPLEMENTED');
           }
@@ -43,19 +43,34 @@ void main() {
       await tester.pumpWidget(buildSubject());
 
       expect(find.text('Tap the button to fetch battery info'), findsOneWidget);
-      expect(find.text('Battery Level'), findsOneWidget);
+      expect(find.text('Battery Info'), findsOneWidget);
     });
 
-    testWidgets('displays battery level after tapping button', (tester) async {
-      setUpMockChannel(level: 85, state: 'discharging');
+    testWidgets('displays battery info after tapping button', (tester) async {
+      setUpMockChannel(level: 85, state: 'discharging', technology: 'Li-ion');
       addTearDown(clearMockChannel);
 
       await tester.pumpWidget(buildSubject());
-      await tester.tap(find.text('Get Battery Level'));
+      await tester.tap(find.text('Get Battery Info'));
       await tester.pumpAndSettle();
 
       expect(find.text('85%'), findsOneWidget);
       expect(find.text('State: discharging'), findsOneWidget);
+      expect(find.text('Technology: Li-ion'), findsOneWidget);
+    });
+
+    testWidgets('shows friendly message when level is unavailable', (
+      tester,
+    ) async {
+      setUpMockChannel(level: -1, state: 'unknown', technology: 'unknown');
+      addTearDown(clearMockChannel);
+
+      await tester.pumpWidget(buildSubject());
+      await tester.tap(find.text('Get Battery Info'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Battery level unavailable'), findsOneWidget);
+      expect(find.text('-1%'), findsNothing);
     });
 
     testWidgets('shows error when PlatformException occurs', (tester) async {
@@ -69,29 +84,38 @@ void main() {
       addTearDown(clearMockChannel);
 
       await tester.pumpWidget(buildSubject());
-      await tester.tap(find.text('Get Battery Level'));
+      await tester.tap(find.text('Get Battery Info'));
       await tester.pumpAndSettle();
 
       expect(find.text('Battery not available'), findsOneWidget);
     });
 
-    testWidgets('shows loading indicator during fetch', (tester) async {
-      final completer = Completer<int>();
+    testWidgets('shows loading indicator and disables button during fetch', (
+      tester,
+    ) async {
+      final completer = Completer<Map<Object?, Object?>>();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-            if (call.method == 'getBatteryLevel') return completer.future;
-            if (call.method == 'getBatteryState') return 'discharging';
+            if (call.method == 'getBatteryInfo') return completer.future;
             return null;
           });
       addTearDown(clearMockChannel);
 
       await tester.pumpWidget(buildSubject());
-      await tester.tap(find.text('Get Battery Level'));
+      await tester.tap(find.text('Get Battery Info'));
       await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      final button = tester.widget<FilledButton>(
+        find.bySubtype<FilledButton>(),
+      );
+      expect(button.onPressed, isNull);
 
-      completer.complete(85);
+      completer.complete({
+        'level': 85,
+        'state': 'discharging',
+        'technology': 'Li-ion',
+      });
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
