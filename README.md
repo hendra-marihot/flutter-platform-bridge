@@ -1,22 +1,19 @@
 # Flutter Platform Bridge
 
-A Flutter app that implements every pattern for communicating between Dart and
-native platform code — MethodChannel, EventChannel, Pigeon, and dart:ffi — with
-working Android handlers, a full test suite, and CI.
+[![CI](https://github.com/hendra-marihot/flutter-platform-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/hendra-marihot/flutter-platform-bridge/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+A Flutter app that walks through the four patterns for communicating between Dart
+and native platform code — MethodChannel and EventChannel as working Android
+implementations, Pigeon and dart:ffi as annotated concept screens — with a full
+test suite and CI.
 
 I built this to demonstrate a skill that's fundamental to senior-level Flutter
 work: understanding how the framework boundary actually works, not just which
 package to install. It's one piece of a broader portfolio; each repo isolates a
 different area of mobile engineering depth.
 
-<!-- TODO: Add a ~10s GIF showing:
-  Home screen → tap MethodChannel → battery result appears → back →
-  tap EventChannel → tap Start → live accelerometer data streaming.
-  Capture on a real Android device for authentic sensor data.
-  Recommended: Android Studio screen recorder or `scrcpy` with `ffmpeg` to GIF.
-  Then uncomment the line below:
-![Demo](docs/demo.gif)
--->
+![MethodChannel battery call, then live accelerometer data over an EventChannel](docs/demo.gif)
 
 ## What's here
 
@@ -32,8 +29,6 @@ and SensorManager. The two concept screens show annotated code walkthroughs and
 tradeoff comparisons — they exist to demonstrate awareness of the full landscape,
 not to pad the demo count.
 
-<!-- TODO: Review this section — the reasoning was inferred from the code, not
-  from your words. Rewrite anything that doesn't match your actual thinking. -->
 ## Decisions and tradeoffs
 
 ### Zero external dependencies
