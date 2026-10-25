@@ -3,67 +3,38 @@
 [![CI](https://github.com/hendra-marihot/flutter-platform-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/hendra-marihot/flutter-platform-bridge/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-A Flutter app that walks through the four patterns for communicating between Dart
-and native platform code — MethodChannel and EventChannel as working Android
-implementations, Pigeon and dart:ffi as annotated concept screens — with a full
-test suite and CI.
-
-I built this to demonstrate a skill that's fundamental to senior-level Flutter
-work: understanding how the framework boundary actually works, not just which
-package to install. It's one piece of a broader portfolio; each repo isolates a
-different area of mobile engineering depth.
+A Flutter app that walks through the four ways Dart talks to native code. MethodChannel and EventChannel are implemented against real Android APIs. Pigeon and dart:ffi are annotated concept screens. The repo shows that I understand the framework boundary itself, not only which package to install.
 
 ![MethodChannel battery call, then live accelerometer data over an EventChannel](docs/demo.gif)
 
 ## What's here
 
-| Pattern | Screen | Status | When you'd use it |
-|---------|--------|--------|-------------------|
-| MethodChannel | Battery level + state | Functional | One-shot native calls: battery, clipboard, device info |
-| EventChannel | Live accelerometer | Functional | Continuous native streams: sensors, location, Bluetooth |
-| Pigeon | Concept showcase | Display-only | Any channel call at scale — eliminates stringly-typed boilerplate |
-| dart:ffi | Concept showcase | Display-only | C/C++ libraries: image processing, crypto, ML inference |
+| Pattern | Screen | Status | Use it for |
+|---------|--------|--------|------------|
+| MethodChannel | Battery level and state | Working | One-shot native calls: battery, clipboard, device info |
+| EventChannel | Live accelerometer | Working | Continuous native streams: sensors, location, Bluetooth |
+| Pigeon | Concept screen | Display only | Many channel calls. Removes stringly-typed boilerplate |
+| dart:ffi | Concept screen | Display only | C and C++ libraries: image processing, crypto, ML inference |
 
-The two functional demos make real native calls through Android's BatteryManager
-and SensorManager. The two concept screens show annotated code walkthroughs and
-tradeoff comparisons — they exist to demonstrate awareness of the full landscape,
-not to pad the demo count.
+The two working demos call Android's `BatteryManager` and `SensorManager`. The two concept screens show annotated code and tradeoff tables.
 
-## Decisions and tradeoffs
+## Decisions
 
-### Zero external dependencies
+### No external packages
 
-The only dependencies are `flutter`, `flutter_test`, and `flutter_lints`. That's
-deliberate. This project is about the platform boundary itself — adding packages
-would obscure whether I understand the underlying mechanism or just know which
-import to reach for. Every line of channel code, serialization handling, and
-lifecycle management is visible in the repo.
+The only dependencies are `flutter`, `flutter_test` and `flutter_lints`. Every line of channel code, serialization and lifecycle handling is in the repo, so there is no package hiding the mechanism.
 
-### Two functional, two conceptual
+### Two working, two conceptual
 
-I implemented MethodChannel and EventChannel end-to-end because they're the
-patterns a Flutter developer actually writes by hand. Pigeon and FFI are shown as
-annotated code walkthroughs with tradeoff tables because implementing them would
-add build complexity (code generation, C compilation) without demonstrating
-additional judgment — the interesting decision with Pigeon is *when* to adopt it,
-not how to run `dart run pigeon`.
+MethodChannel and EventChannel are what a Flutter developer writes by hand, so they are implemented end to end. Pigeon and FFI need code generation and C compilation. The interesting question with them is when to adopt them, not how to run the generator, so they are explained instead.
 
-### Stream caching with `late final`
+### A `late final` stream
 
-`SensorStream.accelerometerEvents` is a `late final` field, not a getter. This
-matters: `EventChannel.receiveBroadcastStream()` creates a new native listener
-subscription each time it's called. A getter that calls it on every access would
-silently leak native sensor listeners. The `late final` pattern ensures one
-native subscription per `SensorStream` instance, with `onListen`/`onCancel`
-firing correctly on each Dart subscribe/unsubscribe cycle. I found this bug
-during development — the fix is small but the failure mode is subtle.
+`SensorStream.accelerometerEvents` is a `late final` field, not a getter. `EventChannel.receiveBroadcastStream()` creates a new native listener each time it is called. A getter would leak sensor listeners on every access. The field gives one native subscription per `SensorStream`, with `onListen` and `onCancel` firing on each Dart subscribe and cancel. I found this bug while building the demo.
 
-### `mounted` guards after every await
+### `mounted` after every await
 
-`MethodChannelScreen._fetchBatteryLevel()` has four `mounted` checks — after the
-service calls, in both catch blocks, and in `finally`. Verbose, but every async
-gap in a StatefulWidget is a potential `setState`-after-dispose crash. I'd rather
-be explicit than debug a race condition.
+`MethodChannelScreen._fetchBatteryLevel()` checks `mounted` after the service call, in both catch blocks and in `finally`. Every async gap in a `StatefulWidget` is a possible `setState` after dispose.
 
 ## Architecture
 
@@ -88,60 +59,35 @@ be explicit than debug a race condition.
                                                                          onCancel → unregisterListener
 ```
 
-Each pattern is self-contained in its own directory under `lib/`. The service
-layer (`BatteryService`, `SensorStream`) wraps the raw channel and exposes typed
-Dart APIs — the UI never touches `MethodChannel` or `EventChannel` directly.
+Each pattern lives in its own directory under `lib/`. `BatteryService` and `SensorStream` wrap the raw channels and expose typed Dart APIs. The UI never touches `MethodChannel` or `EventChannel` directly.
 
-On the native side, `MainActivity.kt` registers both handlers in
-`configureFlutterEngine`. The accelerometer handler implements proper lifecycle
-management: sensor listener is registered in `onListen` and unregistered in
-`onCancel`, with references nulled out to avoid leaks.
+`MainActivity.kt` registers both handlers in `configureFlutterEngine`. The accelerometer handler registers the sensor listener in `onListen`, unregisters it in `onCancel`, and clears references to avoid leaks.
 
 ## How the patterns compare
 
 | | MethodChannel | EventChannel | Pigeon | dart:ffi |
 |---|---|---|---|---|
 | **Data flow** | Dart → Native → Dart | Native → Dart (stream) | Dart ↔ Native | Dart ↔ Native |
-| **Type safety** | Runtime (Map) | Runtime (Map) | Compile-time (generated) | Compile-time (typedefs) |
-| **Serialization** | StandardMethodCodec | StandardMethodCodec | StandardMethodCodec | None — direct ABI |
-| **Boilerplate** | Manual per method | Manual handler | Code-generated | Manual typedefs |
-| **Error model** | PlatformException | Stream onError | Typed exceptions | Native crashes / segfaults |
-| **Best for** | One-shot calls | Continuous events | Scaling past 5+ methods | C/C++ library bindings |
+| **Type safety** | Runtime (Map) | Runtime (Map) | Compile time (generated) | Compile time (typedefs) |
+| **Serialization** | StandardMethodCodec | StandardMethodCodec | StandardMethodCodec | None, direct ABI |
+| **Boilerplate** | Manual per method | Manual handler | Generated | Manual typedefs |
+| **Errors** | PlatformException | Stream onError | Typed exceptions | Native crashes |
+| **Best for** | One-shot calls | Continuous events | More than a few methods | C and C++ bindings |
 
-## Testing platform code
+## Tests
 
-Platform channels are awkward to test because the native side doesn't exist in
-`flutter test`. The strategy here splits along that boundary:
+39 tests across 6 files. The native side does not exist in `flutter test`, so the strategy splits at the boundary.
 
-**Fully testable** (100% coverage): `BatteryService` and `MethodChannelScreen`
-are tested by intercepting the channel with
-`TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler`.
-This covers the happy path, null fallbacks, `PlatformException` propagation,
-loading states, and error display — everything on the Dart side of the boundary.
+- **Fully tested:** `BatteryService` and `MethodChannelScreen`. The channel is intercepted with `TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler`. Tests cover the happy path, null fallbacks, `PlatformException` propagation, loading and error states.
+- **Partly tested:** `SensorStream` and `EventChannelScreen`. Tests verify stream caching with `identical(stream1, stream2)`, event parsing, and widget behavior for data, error and dispose. The real sensor path needs hardware.
 
-**Partially testable** (~40-47%): `SensorStream` and `EventChannelScreen` can
-verify stream caching (`identical(stream1, stream2)`) and initial widget state,
-but the stream callback paths require a real native sensor. That's not a coverage
-gap I'd try to close with more mocks — it would test the mock, not the code.
+CI gates coverage at 60%, which is fair given two display-only screens and hardware-bound callbacks.
 
-**30 tests total** across 6 files. CI gates at 60% overall, which is honest
-given that half the screens are display-only and EventChannel callbacks need
-hardware.
+## Not included
 
-## What's not here
-
-**iOS native handlers.** The Dart side is platform-agnostic, but I scoped native
-implementation to Android. Adding iOS would mean Swift/CoreMotion for the
-accelerometer and UIDevice for battery — same patterns, different APIs. The
-architecture supports it without changes to the Dart layer.
-
-**Live Pigeon codegen or FFI calls.** The concept screens show the code and
-explain the tradeoffs. Making them functional would require build-time code
-generation (Pigeon) and C compilation (FFI), adding toolchain complexity that
-doesn't demonstrate additional engineering judgment for this project's purpose.
-
-**State management, DI, networking.** Deliberately excluded. This repo is about
-one thing. Those are covered in other portfolio projects.
+- **iOS handlers.** The Dart side is platform-neutral. iOS would need Swift with `CMMotionManager` and `UIDevice`. Same channel names, no Dart changes.
+- **Working Pigeon or FFI.** See above.
+- **State management, DI, networking.** Covered in the other repos.
 
 ## Project structure
 
@@ -152,7 +98,7 @@ lib/
 ├── home_screen.dart                Navigation hub (4 demo cards)
 ├── method_channel/
 │   ├── battery_service.dart        Typed MethodChannel wrapper
-│   └── method_channel_screen.dart  Battery demo UI + state management
+│   └── method_channel_screen.dart  Battery demo UI + state
 ├── event_channel/
 │   ├── sensor_stream.dart          Typed EventChannel wrapper (late final cache)
 │   └── event_channel_screen.dart   Live accelerometer UI + start/stop lifecycle
@@ -162,49 +108,37 @@ lib/
     └── ffi_screen.dart             Code walkthrough + memory model diagram
 
 android/app/src/main/kotlin/.../
-└── MainActivity.kt                 BatteryManager + SensorManager handlers (99 lines)
+└── MainActivity.kt                 BatteryManager + SensorManager handlers
 
-test/                               30 tests across 6 files, mirroring lib/ structure
+test/                               39 tests across 6 files, mirroring lib/
 ```
 
-## Running locally
+## Run it
 
-Requires Flutter stable channel (Dart SDK 3.8+, per `pubspec.yaml`) and an
-Android device or emulator — the MethodChannel and EventChannel demos make real
-native calls that won't work without one.
+Needs Dart 3.8+ and an Android device or emulator. The channel demos make real native calls.
 
 ```bash
 flutter pub get
-flutter run                         # Needs a connected device
-flutter test                        # 30 tests, no device needed
-flutter analyze                     # Lint + type checks
+flutter run        # needs a device
+flutter test       # no device needed
+flutter analyze
 ```
 
 ## CI
 
-GitHub Actions runs on every push and PR to `main`: static analysis
-(`--fatal-infos`), format enforcement (`dart format --set-exit-if-changed`),
-tests with coverage, and a coverage gate that fails the build below 60%. The
-gate uses raw `awk` on the lcov output rather than requiring the `lcov` CLI —
-one less tool dependency in the pipeline.
+GitHub Actions runs on every push and PR to `main`: `flutter analyze --fatal-infos`, `dart format --set-exit-if-changed`, tests with coverage, and a 60% coverage gate. The gate parses the lcov file with `awk`, so the pipeline does not need the `lcov` CLI.
 
-## What I'd do next
+## Next steps
 
-1. **iOS parity** — Swift handlers for battery (UIDevice) and accelerometer
-   (CMMotionManager), same channel names, no Dart changes needed.
-2. **Make Pigeon functional** — run the codegen end-to-end to show the generated
-   type-safe API replacing raw MethodChannel calls. This is the strongest
-   upgrade because Pigeon is what you'd actually adopt in a production codebase
-   scaling past a handful of channel methods.
-3. **Bidirectional communication** — add an example where native code initiates a
-   call to Dart (e.g., push notifications or deep links), showing the reverse
-   direction of the bridge.
+1. **iOS parity.** Swift handlers for battery and accelerometer.
+2. **Working Pigeon.** Run the generator end to end and replace the raw MethodChannel calls. This is the upgrade a production codebase would make first.
+3. **Native to Dart calls.** An example where native code starts the call, such as a push notification or deep link.
 
 ## Related repositories
 
-This is one piece of a portfolio covering different aspects of senior mobile engineering:
+Each repo in this set covers one area of mobile engineering.
 
-| Repository | Focus area |
+| Repository | Focus |
 |---|---|
 | [compose-newsreader](https://github.com/hendra-marihot/compose-newsreader) | Multi-module Android, Hilt, Room, offline-first |
 | [android-design-system](https://github.com/hendra-marihot/android-design-system) | Compose component library, design tokens |
@@ -213,8 +147,8 @@ This is one piece of a portfolio covering different aspects of senior mobile eng
 | [flutter-expense-tracker](https://github.com/hendra-marihot/flutter-expense-tracker) | Clean Architecture, Riverpod, Drift, Material 3 |
 | [flutter-ui-toolkit](https://github.com/hendra-marihot/flutter-ui-toolkit) | Reusable widgets, shimmer, adaptive layouts |
 | **flutter-platform-bridge** (this repo) | Platform channels, native interop |
-| [mobile-ci-cd-templates](https://github.com/hendra-marihot/mobile-ci-cd-templates) | CI/CD, release automation, infrastructure |
+| [mobile-ci-cd-templates](https://github.com/hendra-marihot/mobile-ci-cd-templates) | CI/CD, release automation |
 
 ## License
 
-Copyright 2026 Hendra Marihot. Apache License 2.0 — see [LICENSE](LICENSE) for details.
+Copyright 2026 Hendra Marihot. Licensed under the [Apache License 2.0](LICENSE).
